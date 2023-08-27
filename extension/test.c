@@ -31,7 +31,7 @@ ZEND_GET_MODULE(test)
 
 PHP_FUNCTION(test)
 {
-	RETURN_STRING("hello habr"); // возвращаем PHP-строку, второй параметр указывает, нужно ли копировать строку в памяти или нет
+	RETURN_STRING("hello extension");
 }
 
 PHP_FUNCTION(multiply)
@@ -53,5 +53,5 @@ PHP_FUNCTION(multiply)
 			sum+= varargs[i].value.lval;
 		}
 	}
-	RETURN_DOUBLE(sum); // возвращаем PHP-строку, второй параметр указывает, нужно ли копировать строку в памяти или нет
+	RETURN_DOUBLE(sum);
 }
