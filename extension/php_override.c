@@ -1,18 +1,34 @@
 #include "php.h"
 
-PHP_FUNCTION(test);
+PHP_FUNCTION(php_override);
 
 PHP_FUNCTION(multiply);
 
-ZEND_BEGIN_ARG_INFO_EX(arginfo_test, 0, 0, 0)
+ZEND_BEGIN_ARG_INFO_EX(arginfo_php_override, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_multiply, 0, 0, 0)
 ZEND_END_ARG_INFO()
-const zend_function_entry test_functions[] = {
-	PHP_FE(test, arginfo_test)
-		PHP_FE(multiply, arginfo_multiply)
-			PHP_FE_END};
+const zend_function_entry php_override_functions[] =
+	{
+		PHP_FE(php_override, arginfo_php_override)
+			PHP_FE(multiply, arginfo_multiply)
+				PHP_FE_END};
+
+static zval *get_zval_ptr_undef(zend_uchar op_type, znode_op op, zend_execute_data *execute_data)
+{
+	switch (op_type)
+	{
+	case IS_TMP_VAR:
+	case IS_VAR:
+	case IS_CV:
+		return EX_VAR(op.var);
+	case IS_CONST:
+		return RT_CONSTANT(execute_data->opline, op);
+	default:
+		return NULL;
+	}
+}
 
 zend_string *operator_method_name(zend_uchar opcode)
 {
@@ -20,9 +36,12 @@ zend_string *operator_method_name(zend_uchar opcode)
 	{
 	case ZEND_ADD:
 		return zend_string_init("__add", strlen("__add"), 1);
-
+	case ZEND_PRE_INC:
+		return zend_string_init("__pre_inc", strlen("__pre_inc"), 1);
+	case ZEND_POST_INC:
+		return zend_string_init("__post_inc", strlen("__post_inc"), 1);
 	default:
-		return zend_string_init("__any_action", strlen("__any_action"), 1);
+		return NULL;
 	}
 }
 
@@ -30,6 +49,10 @@ zend_bool operator_get_method(zend_string *method, zval *obj,
 							  zend_fcall_info *fci,
 							  zend_fcall_info_cache *fcc)
 {
+	if (method == NULL)
+	{
+		return 0;
+	}
 	memset(fci, 0, sizeof(zend_fcall_info));
 	fci->size = sizeof(zend_fcall_info);
 	fci->object = Z_OBJ_P(obj);
@@ -57,34 +80,41 @@ zend_bool operator_get_method(zend_string *method, zval *obj,
 
 	return 1;
 }
-static int op_handler(zend_execute_data *execute_data)
-{
-	// printf("hello here");
-	zend_op *opline = execute_data->opline;
-	zval *op1 = EX_VAR(opline->result.var);
-	zend_fcall_info fci;
-	zend_fcall_info_cache fcc;
-	// zend_string *method = operator_method_name(opline->opcode);
-	ZVAL_LONG(op1, 5);
-	execute_data->opline++;
-	return ZEND_USER_OPCODE_CONTINUE;
-}
 
 static int op_handler_object(zend_execute_data *execute_data)
 {
-	// printf("hello here");
 	zend_op *opline = execute_data->opline;
-	zval *op1 = EX_VAR(opline->op1.var);
-	zval *op2 = EX_VAR(opline->op2.var);
+	zval *op1, *op2, *res;
 	zend_fcall_info fci;
 	zend_fcall_info_cache fcc;
 	zend_string *method = operator_method_name(opline->opcode);
 	zend_string *any_action = zend_string_init("__any_action", strlen("__any_action"), 1);
 	zval args;
 	zval *args_t = malloc(sizeof(zval) * 2);
-
 	array_init_size(&args, op2 ? 2 : 1);
 	int is_any_action_flag = 0;
+
+	if (opline->result_type == IS_UNUSED)
+	{
+		/* Assign op */
+		op1 = EX_VAR(opline->op1.var);
+	}
+	else
+	{
+		op1 = get_zval_ptr_undef(opline->op1_type, opline->op1, execute_data);
+	}
+	ZVAL_DEREF(op1);
+
+	if (opline->result_type == IS_UNUSED)
+	{
+		res = op1;
+	}
+	else
+	{
+		res = EX_VAR(opline->result.var);
+	}
+
+	op2 = get_zval_ptr_undef(opline->op2_type, opline->op2, execute_data);
 	if (Z_TYPE_P(op1) != IS_OBJECT)
 		return ZEND_USER_OPCODE_DISPATCH;
 	if (!operator_get_method(method, op1, &fci, &fcc))
@@ -94,27 +124,28 @@ static int op_handler_object(zend_execute_data *execute_data)
 		else
 			is_any_action_flag = 1;
 	}
-
+	if (op2 == NULL)
+	{
+		op2 = malloc(sizeof(zval));
+		ZVAL_NULL(op2);
+	}
 	if (is_any_action_flag)
 	{
 		zval val;
 		int opcode = opline->opcode;
 		ZVAL_LONG(&val, opcode);
-		add_next_index_zval(&args, &val);
-		if (op2)
-		{
-			add_next_index_zval(&args, op2);
-			args_t[1] = *op2;
-		}
+		//	add_next_index_zval(&args, &val);
+		//	add_next_index_zval(&args, op2);
+
 		args_t[0] = val;
-		fci.retval = EX_VAR(opline->result.var);
-		args.u2.num_args = 2;
+		args_t[1] = *op2;
+		fci.retval = res;
 		fci.params = args_t;
 		fci.param_count = 2;
 	}
 	else
 	{
-		fci.retval = EX_VAR(opline->result.var);
+		fci.retval = res;
 		fci.params = op2;
 		fci.param_count = op2 ? 1 : 0;
 	}
@@ -124,34 +155,44 @@ static int op_handler_object(zend_execute_data *execute_data)
 		php_error(E_WARNING, "Failed calling %s::%s()", Z_OBJCE_P(op1)->name, Z_STRVAL(fci.function_name));
 		ZVAL_NULL(fci.retval);
 	}
+	zend_string_free(method);
+	zend_string_free(any_action);
+	free(args_t);
 	EX(opline) = opline + 1;
 	return ZEND_USER_OPCODE_CONTINUE;
 }
 
-static PHP_MINIT_FUNCTION(test)
+static int op_handler_object1(zend_execute_data *execute_data)
 {
-	zend_set_user_opcode_handler(ZEND_ADD, op_handler_object);
-	// zend_set_user_opcode_handler(ZEND_SUB, op_handler);
-	//  zend_set_user_opcode_handler(3, op_handler);
-	//  zend_set_user_opcode_handler(4, op_handler);
-	//  printf("hello world");
+	return ZEND_USER_OPCODE_DISPATCH;
 }
 
-zend_module_entry test_module_entry = {
-	STANDARD_MODULE_HEADER, // #if ZEND_MODULE_API_NO >= 20010901
-	"test",					// название модуля
-	test_functions,			// указываем экспортируемые функции
-	PHP_MINIT(test),		// PHP_MINIT(test), Module Initialization
-	NULL,					// PHP_MSHUTDOWN(test), Module Shutdown
-	NULL,					// PHP_RINIT(test), Request Initialization
-	NULL,					// PHP_RSHUTDOWN(test), Request Shutdown
-	NULL,					// PHP_MINFO(test), Module Info (для phpinfo())
-	"0.3",					// версия нашего модуля
+static PHP_MINIT_FUNCTION(php_override)
+{
+	zend_set_user_opcode_handler(ZEND_ADD, op_handler_object);
+	zend_set_user_opcode_handler(ZEND_POST_INC, op_handler_object);
+	zend_set_user_opcode_handler(ZEND_PRE_INC, op_handler_object);
+	// zend_set_user_opcode_handler(ZEND_SUB, op_handler_object);
+	//  zend_set_user_opcode_handler(ZEND_SUB, op_handler);
+	//   zend_set_user_opcode_handler(3, op_handler);
+	//   zend_set_user_opcode_handler(4, op_handler);
+}
+
+zend_module_entry php_override_module_entry = {
+	STANDARD_MODULE_HEADER,	 // #if ZEND_MODULE_API_NO >= 20010901
+	"php_override",			 // название модуля
+	php_override_functions,	 // указываем экспортируемые функции
+	PHP_MINIT(php_override), // PHP_MINIT(php_override), Module Initialization
+	NULL,					 // PHP_MSHUTDOWN(php_override), Module Shutdown
+	NULL,					 // PHP_RINIT(php_override), Request Initialization
+	NULL,					 // PHP_RSHUTDOWN(php_override), Request Shutdown
+	NULL,					 // PHP_MINFO(php_override), Module Info (для phpinfo())
+	"0.3",					 // версия нашего модуля
 	STANDARD_MODULE_PROPERTIES};
 
-ZEND_GET_MODULE(test)
+ZEND_GET_MODULE(php_override)
 
-PHP_FUNCTION(test)
+PHP_FUNCTION(php_override)
 {
 	RETURN_STRING("hello extension");
 }

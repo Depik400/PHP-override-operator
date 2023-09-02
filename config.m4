@@ -1,6 +1,6 @@
-PHP_ARG_ENABLE(test, Enable test support)
+PHP_ARG_ENABLE(php_override, Enable test support)
 
-if test "$PHP_TEST" = "yes"; then
-   AC_DEFINE(HAVE_TEST, 1, [You have test extension])
-   PHP_NEW_EXTENSION(test, extension/test.c, $ext_shared)
+if test "$PHP_PHP_OVERRIDE" = "yes"; then
+   AC_DEFINE(HAVE_PHP_OVERRIDE_EXTENSION, 1, [You have test extension])
+   PHP_NEW_EXTENSION(php_override, extension/php_override.c, $ext_shared)
 fi
