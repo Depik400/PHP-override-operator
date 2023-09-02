@@ -9,9 +9,15 @@ echo multiply(1, 2, 3, 4, 5, 6, 7, 8.5, '1');
 class A
 {
     private $a = 1;
-    public function __add($s)
+    // public function __add($s)
+    // {
+    //     return $this->a + $s;
+    // }
+
+    public function __any_action($a, $b)
     {
-        return $this->a + $s;
+        echo " args - $a and $b  ";
+        return 0;
     }
 }
 

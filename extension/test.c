@@ -79,19 +79,49 @@ static int op_handler_object(zend_execute_data *execute_data)
 	zend_fcall_info fci;
 	zend_fcall_info_cache fcc;
 	zend_string *method = operator_method_name(opline->opcode);
-	if (Z_TYPE_P(op1) != IS_OBJECT || !operator_get_method(method, op1, &fci, &fcc))
-		return ZEND_USER_OPCODE_DISPATCH;
+	zend_string *any_action = zend_string_init("__any_action", strlen("__any_action"), 1);
+	zval args;
+	zval *args_t = malloc(sizeof(zval) * 2);
 
-	fci.retval = EX_VAR(opline->result.var);
-	fci.params = op2;
-	fci.param_count = op2 ? 1 : 0;
+	array_init_size(&args, op2 ? 2 : 1);
+	int is_any_action_flag = 0;
+	if (Z_TYPE_P(op1) != IS_OBJECT)
+		return ZEND_USER_OPCODE_DISPATCH;
+	if (!operator_get_method(method, op1, &fci, &fcc))
+	{
+		if (!operator_get_method(any_action, op1, &fci, &fcc))
+			return ZEND_USER_OPCODE_DISPATCH;
+		else
+			is_any_action_flag = 1;
+	}
+
+	if (is_any_action_flag)
+	{
+		zval val;
+		int opcode = opline->opcode;
+		ZVAL_LONG(&val, opcode);
+		add_next_index_zval(&args, &val);
+		if (op2)
+		{
+			add_next_index_zval(&args, op2);
+			args_t[1] = *op2;
+		}
+		args_t[0] = val;
+		fci.retval = EX_VAR(opline->result.var);
+		args.u2.num_args = 2;
+		fci.params = args_t;
+		fci.param_count = 2;
+	}
+	else
+	{
+		fci.retval = EX_VAR(opline->result.var);
+		fci.params = op2;
+		fci.param_count = op2 ? 1 : 0;
+	}
+
 	if (FAILURE == zend_call_function(&fci, &fcc))
 	{
-		php_error(
-			E_WARNING,
-			"Failed calling %s::%s()",
-			Z_OBJCE_P(op1)->name,
-			Z_STRVAL(fci.function_name));
+		php_error(E_WARNING, "Failed calling %s::%s()", Z_OBJCE_P(op1)->name, Z_STRVAL(fci.function_name));
 		ZVAL_NULL(fci.retval);
 	}
 	EX(opline) = opline + 1;
