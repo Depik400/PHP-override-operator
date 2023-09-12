@@ -1,4 +1,5 @@
 #include "php.h"
+#include <iostream>
 
 PHP_FUNCTION(php_override);
 
@@ -83,14 +84,14 @@ zend_bool operator_get_method(zend_string *method, zval *obj,
 
 static int op_handler_object(zend_execute_data *execute_data)
 {
-	zend_op *opline = execute_data->opline;
+	const zend_op *opline = execute_data->opline;
 	zval *op1, *op2, *res;
 	zend_fcall_info fci;
 	zend_fcall_info_cache fcc;
 	zend_string *method = operator_method_name(opline->opcode);
 	zend_string *any_action = zend_string_init("__any_action", strlen("__any_action"), 1);
 	zval args;
-	zval *args_t = malloc(sizeof(zval) * 2);
+	zval *args_t =new zval[2];
 	array_init_size(&args, op2 ? 2 : 1);
 	int is_any_action_flag = 0;
 
@@ -126,7 +127,7 @@ static int op_handler_object(zend_execute_data *execute_data)
 	}
 	if (op2 == NULL)
 	{
-		op2 = malloc(sizeof(zval));
+		op2 = new zval;
 		ZVAL_NULL(op2);
 	}
 	if (is_any_action_flag)
@@ -177,7 +178,7 @@ static PHP_MINIT_FUNCTION(php_override)
 	//   zend_set_user_opcode_handler(3, op_handler);
 	//   zend_set_user_opcode_handler(4, op_handler);
 }
-
+extern "C" {
 zend_module_entry php_override_module_entry = {
 	STANDARD_MODULE_HEADER,	 // #if ZEND_MODULE_API_NO >= 20010901
 	"php_override",			 // название модуля
@@ -189,6 +190,7 @@ zend_module_entry php_override_module_entry = {
 	NULL,					 // PHP_MINFO(php_override), Module Info (для phpinfo())
 	"0.3",					 // версия нашего модуля
 	STANDARD_MODULE_PROPERTIES};
+}
 
 ZEND_GET_MODULE(php_override)
 

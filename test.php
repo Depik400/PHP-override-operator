@@ -4,7 +4,7 @@ $a = 1;
 //echo $a + 1;
 //echo test();
 
-//echo multiply(1, 2, 3, 4, 5, 6, 7, 8.5, '1');
+echo multiply(1, 2, 3, 4, 5, 6, 7, 8.5, '1');
 
 class A
 {
@@ -13,6 +13,10 @@ class A
     // {
     //     return $this->a + $s;
     // }
+
+    public function echoHere() {
+        echo 'here';
+    }
     public function __add($c)
     {
         if (is_int($c))
@@ -43,5 +47,5 @@ $b = 3;
 $a = new A();
 $b = new A();
 //$a++;/$a;
-echo $a++;
-//echo ($a + $b)->a;
+//echo $a++;
+echo ($a + $b)->echoHere();
