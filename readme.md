@@ -22,6 +22,10 @@ class A
         }
         return $this;
     }
+
+    public function echoHere() {    
+        return 'Hello world';
+    }
 }
 $a = new A();
 $b = new A();
