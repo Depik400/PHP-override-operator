@@ -29,5 +29,5 @@ class A
 }
 $a = new A();
 $b = new A();
-echo ($a + $b)->echoHere();
+echo ($a + $b)->echoHere(); // Prints Hello world
 ```
